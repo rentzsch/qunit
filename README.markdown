@@ -1,6 +1,6 @@
 # A small [QUnit](http://docs.jquery.com/QUnit) fork.
 
-It just adds two functions: `doubt()` and `match()`.
+It just adds two functions: `doubt()` and `match()`. Kind of recursively, `doubt()` has its own tests, which [you can run here](http://rentzsch.github.com/qunit/).
 
 ## `doubt()`
 
