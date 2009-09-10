@@ -261,7 +261,9 @@ $.extend(window, {
 	q: q,
 	t: t,
 	url: url,
-	triggerEvent: triggerEvent
+	triggerEvent: triggerEvent,
+	doubt: doubt,
+	match: match
 });
 
 $(window).load(function() {
@@ -637,6 +639,79 @@ function triggerEvent( elem, type, event ) {
 	}
 }
 
+function doubt(func) {
+    var testMsg,                // String
+        expectedExceptionMsg,   // RegExp
+        expectedExceptionType,  // Function
+        argIndex = 1,
+        argType,
+        thrownException,
+        actualExceptionType;
+    
+    // Process args.
+    //assertArgs(arguments, [Function,[String,RegExp,Function,undefined],[String,RegExp,Function,undefined],[String,RegExp,Function,undefined]]);
+    for (; argIndex < arguments.length; argIndex++) {
+        argType = jwr.type_of(arguments[argIndex]);
+        if (argType === 'string') {
+            if (testMsg !== undefined) { throw 'testMsg can only be supplied once'; }
+            testMsg = arguments[argIndex];
+        } else if (argType === 'regexp') {
+            if (expectedExceptionMsg !== undefined) { throw 'expectedExceptionMsg can only be supplied once'; }
+            expectedExceptionMsg = arguments[argIndex];
+        } else if (argType === 'function') {
+            if (expectedExceptionType !== undefined) { throw 'expectedExceptionType can only be supplied once'; }
+            expectedExceptionType = Function.introspect(arguments[argIndex]).name;
+        } else {
+            throw 'doubt(): argument '+(argIndex+1)+' (one-based) has an unhandled type: '+argType;
+        }
+    }
+    if (!testMsg) {
+        testMsg = '';
+    }
+    
+    // Meat.
+    try {
+        func();
+    } catch(e) {
+        thrownException = e;
+    }
+    
+    // Process exception against expectations.
+    if (thrownException === undefined) {
+        // Expected exception wasn't thrown.
+        if (expectedExceptionMsg) {
+            if (expectedExceptionType) {
+                testMsg += ' (expected exception of type '+expectedExceptionType+' with message matching '+expectedExceptionMsg+' not thrown)';
+            } else {
+                testMsg += ' (expected exception with message matching '+expectedExceptionMsg+' not thrown)';
+            }
+        } else if (expectedExceptionType) {
+            testMsg += ' (expected exception of type '+expectedExceptionType+' not thrown)';
+        } else {
+            testMsg += ' (expected exception not thrown)';
+        }
+        window.ok(false, testMsg);
+    } else {
+        // Exception thrown.
+        if (expectedExceptionMsg && !expectedExceptionMsg.test(thrownException.message)) {
+            if (expectedExceptionType && expectedExceptionType != thrownException.name) {
+                window.ok(false, testMsg+' (expected exception of type '+expectedExceptionType+' with message matching '+expectedExceptionMsg+', got '+thrownException.name+' with message "'+thrownException.message+'")');
+            } else {
+                window.ok(false, testMsg+' (expected exception with message matching '+expectedExceptionMsg+', got '+thrownException.name+' with message "'+thrownException.message+'")');
+            }
+        } else if (expectedExceptionType && expectedExceptionType != thrownException.name) {
+            window.ok(false, testMsg+' (expected exception of type '+expectedExceptionType+' , got '+thrownException.name+')');
+        } else {
+            window.ok(true, testMsg);
+        }
+    }
+}
+
+function match(actual, expected, message) {
+    var result = actual.match(expected);
+    ok(result, result ? message + ": " + expected : message + ", expected: " + jsDump.parse(expected) + " result: " + jsDump.parse(actual) );
+}
+
 })(jQuery);
 
 /**
@@ -801,3 +876,106 @@ function triggerEvent( elem, type, event ) {
 	};
 
 })();
+
+//
+//  jwr.type_of 1.0d1
+//      Copyright (c) 2009 Jonathan 'Wolf' Rentzsch: <http://rentzsch.com>
+//      Some rights reserved: <http://opensource.org/licenses/mit-license.php>
+//      
+//  Simple extension of built-in typeof that disambiguates 'object'
+//  and recognizes some System-supplied constructors.
+//
+//  Compatibility: IE 6-8, Firefox 3-3.5, Safari 3-4, Chrome 3.
+//
+if (typeof jwr === 'undefined'){ jwr = {}; }
+if (typeof jwr.type_of !== 'function') {
+    jwr.type_of = function(o){
+        var result = typeof o;
+        if (result === 'object') {
+            if (o === null) {
+                result = 'null';
+            } else if (Object.prototype.toString.apply(o) === '[object Array]') {
+                result = 'array';
+            } else if (Object.prototype.toString.apply(o) === '[object RegExp]') {
+                // Firefox 3 thinks RegExps are objects.
+                result = 'regexp';
+            }
+        } else if (result === 'function') {
+            if (o === Array) {
+                result = 'array';
+            } else if (o === Boolean) {
+                result = 'boolean';
+            } else if (o === Function) {
+                result = 'function';
+            } else if (o === Number) {
+                result = 'number';
+            } else if (o === Object) {
+                result = 'object';
+            } else if (o === String) {
+                result = 'string';
+            } else if (o === RegExp) {
+                result = 'regexp';
+            } else if (Object.prototype.toString.apply(o) === '[object RegExp]') {
+                result = 'regexp';
+            }
+        }
+        return result;
+    };
+}
+
+//
+//  Function.introspect 1.0d1
+//      Copyright (c) 2009 Jonathan 'Wolf' Rentzsch: <http://rentzsch.com>
+//      Some rights reserved: <http://opensource.org/licenses/mit-license.php>
+//      
+//  Interrogates a function to return its name, argument names and source code (if not native).
+//
+//  Compatibility: IE 6-8, Firefox 3-3.5, Safari 3-4, Chrome 3.
+//
+if (typeof Function.introspect !== 'function') {
+    Function.introspect = function Function_introspect(func){
+        var functionName,
+            functionArgs = '',
+            functionArgNames = [],
+            functionCode,
+            functionIsNative = false,
+            regexResult;
+    
+        var functionCode = func.toString();
+        
+        if (functionCode.indexOf('(') !== -1) {
+            // Grep function's name, if any.
+            regexResult = /function ([^(]+)/.exec(functionCode);
+            if (regexResult !== null) {
+                functionName = regexResult[1];
+                //functionName = functionName.replace(/\s*(.*)\s*/,'$1');
+                functionName = functionName.replace(/^\s\s*/, '').replace(/\s\s*$/, '');
+            }
+            // Grep functions args, if any.
+            regexResult = /\((.*\w.*)\)/.exec(functionCode);
+            if (regexResult !== null) {
+                functionArgs = regexResult[1];
+                //  Toss whitespace.
+                functionArgs = functionArgs.replace(/\s/g,'');
+                functionArgNames = functionArgs.split(',');
+            }
+        
+            // Strip 'function(){' portion off code string.
+            functionCode = functionCode.substring(functionCode.indexOf('{')+1, functionCode.lastIndexOf('}'));
+            //  Trim whitespace.
+            functionCode = functionCode.replace(/^\s\s*/, '').replace(/\s\s*$/, '');
+        } else {
+            // QUIRK
+            // For TypeError.toString(), IE6-7 return '[object Error]' while IE8 returns just 'Error'.
+            // Fortunately IE6-8 support TypeError.name, which return 'TypeError'.
+            functionName = func.name;
+            functionCode = '[native code]';
+        }
+                
+        if (functionCode === '[native code]') {
+            functionIsNative = true;
+        }
+        
+        return {name:functionName, argNames:functionArgNames, args:functionArgs, code:functionCode, isNative:functionIsNative};
+    };
+}
